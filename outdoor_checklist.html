@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>户外准备清单</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f1117;color:#e2e8f0;font-family:'Microsoft YaHei','Segoe UI',sans-serif;min-height:100vh}
+.header{display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid #2a2d3a;gap:12px}
+.header h1{font-size:20px}
+.mode-switch{margin-left:auto;display:flex;gap:6px}
+.mode-btn{padding:6px 20px;border-radius:16px;border:1px solid #2a2d3a;background:transparent;color:#e2e8f0;cursor:pointer;font-size:13px}
+.mode-btn.active{background:#5b8af5;border-color:#5b8af5;color:#fff}
+.container{max-width:1200px;margin:0 auto;padding:12px}
+.card{background:#1a1d27;border-radius:10px;padding:14px 16px;margin-bottom:10px;border:1px solid #2a2d3a}
+.card h3{font-size:13px;margin-bottom:10px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.form-group{display:flex;flex-direction:column;gap:2px}
+.form-group label{font-size:11px;color:#64748b}
+.form-group input,.form-group select{padding:6px 8px;border-radius:6px;border:1px solid #2a2d3a;background:#1e2130;color:#e2e8f0;font-size:12px;outline:none}
+.form-group input:focus,.form-group select:focus{border-color:#5b8af5}
+.btn-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.btn-bar button{padding:7px 16px;border-radius:16px;border:none;font-size:12px;font-weight:600;cursor:pointer;color:#fff;transition:.15s}
+.btn-bar button:hover{opacity:.85;transform:translateY(-1px)}
+.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.timeline-box,.risk-box{background:#1e2130;border-radius:6px;padding:8px;font-size:12px;line-height:1.5;max-height:200px;overflow-y:auto;white-space:pre-wrap;font-family:Consolas,'Courier New',monospace}
+.safety-checks{margin-top:6px;font-size:12px}
+.safety-checks label{display:flex;align-items:center;gap:4px;padding:2px 0;cursor:pointer}
+.weight-card{background:#1e2130;border-radius:6px;padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.weight-main{font-size:15px;font-weight:700}
+.weight-detail{background:#1e2130;border-radius:6px;padding:10px;font-size:12px;line-height:1.4;max-height:100px;overflow-y:auto;white-space:pre-wrap;font-family:Consolas,'Courier New',monospace}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{background:#1e2130;padding:8px 6px;text-align:left;font-weight:600;color:#5b8af5;border-bottom:2px solid #2a2d3a;position:sticky;top:0}
+tbody tr{border-bottom:1px solid #2a2d3a}
+tbody tr:hover{background:rgba(91,138,245,.08)}
+tbody td{padding:6px}
+.carry-bt{display:inline-block;width:18px;height:18px;border-radius:3px;border:2px solid #64748b;text-align:center;line-height:14px;cursor:pointer;font-size:11px;color:transparent;transition:.15s;user-select:none}
+.carry-bt.ch{background:#4ade80;border-color:#4ade80;color:#000}
+.empty-state{text-align:center;padding:30px;color:#64748b;font-size:13px}
+.footer{text-align:center;padding:12px;font-size:11px;color:#64748b;border-top:1px solid #2a2d3a}
+@media(max-width:700px){.main-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🏔 户外准备清单</h1>
+  <span style="font-size:11px;color:#64748b">出发前的最后检查</span>
+  <div class="mode-switch">
+    <span class="mode-btn active" id="modeHiking" onclick="switchMode('hiking')">🥾 徒步</span>
+    <span class="mode-btn" id="modeDriving" onclick="switchMode('driving')">🚗 驾车</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <h3 style="color:#5b8af5">📋 行程信息</h3>
+    <div class="form-grid" id="formGrid"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="color:#fbbf24">🗺 行程指南</h3>
+    <div class="form-grid" id="routeGrid"></div>
+  </div>
+
+  <div class="btn-bar" id="btnBar">
+    <button style="background:#5b8af5" onclick="generateList()">🔄 生成清单</button>
+    <button style="background:#fbbf24;color:#000" onclick="genTimeline()">📅 时间线</button>
+    <button style="background:#4ade80;color:#000" onclick="selAll()">✅ 全选</button>
+    <button style="background:#f87171" onclick="deselAll()">❌ 全不选</button>
+    <button style="background:#fb923c" onclick="calcWeight()">🧮 算负重</button>
+    <button style="background:#8b5cf6" onclick="exportCSV()">📤 导出CSV</button>
+  </div>
+
+  <div class="main-grid">
+    <div class="card">
+      <h3 style="color:#fbbf24">🕐 行程时间线</h3>
+      <div class="timeline-box" id="timelineContent">点击「时间线」生成</div>
+    </div>
+    <div class="card">
+      <h3 style="color:#f87171">⚠ 风险提示</h3>
+      <div class="risk-box" id="riskContent">点击「生成清单」或「时间线」自动生成</div>
+      <div class="safety-checks" id="safetyChecks"></div>
+    </div>
+  </div>
+
+  <div class="weight-card">
+    <span class="weight-main" id="weightMain">点击「算负重」查看</span>
+    <span id="weightSub" style="font-size:11px;color:#64748b"></span>
+  </div>
+  <div class="weight-detail" id="weightDetail">先点「生成清单」再勾选装备，然后点「算负重」</div>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #2a2d3a">
+      <h3 style="color:#5b8af5;margin:0">🎒 装备清单</h3>
+      <span style="font-size:10px;color:#64748b">点击✓列切换携带状态</span>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>类别</th><th>装备名称</th><th style="text-align:center;width:60px">重量(g)</th><th style="text-align:center;width:40px">数</th><th style="text-align:center;width:40px">✓</th></tr></thead>
+        <tbody id="equipBody"><tr><td colspan="5" class="empty-state">请点击「生成清单」</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="footer">🏕 数据本地存储 · 出行安全第一 · 导出CSV分享队友</div>
+
+<script>
+// ─── 数据 ───
+const HIKING_EQUIP = {
+  '⛺ 露营': [['双人帐篷+地钉',2800],['睡袋(舒适-5℃)',1200],['防潮垫蛋巢',550],['充气枕头',200],['天幕+地钉',800]],
+  '🔥 炊具': [['便携炉头+气罐',350],['套锅1.5L',600],['折叠碗筷',120],['折叠水桶',150],['净水片',80],['防水火柴',30]],
+  '🥾 服装': [['登山鞋(已磨合)',1200],['速干内衣长袖',150],['速干T恤',120],['抓绒衣',350],['冲锋衣硬壳',450],['登山裤',280],['保暖裤',200],['速干袜×3',240],['遮阳帽',60],['保暖帽',50]],
+  '🧭 导航': [['手机+充电宝20000mAh',400],['手持GPS',200],['对讲机×2',360],['北斗信标',230],['口哨',10],['头灯200流明',80],['营地灯',150],['荧光棒×4',80]],
+  '🩹 急救': [['全面急救包',300],['个人药品3天',200],['止痛药布洛芬',30],['抗过敏药',30],['肠胃药',30],['高反药红景天',50],['蛇虫喷雾',80],['弹性绷带',100],['求生毯太空毯',50]],
+  '🔧 工具': [['多功能工具刀',200],['登山杖碳纤维',220],['伞绳10m',100],['扎带魔术贴',30],['三合一充电线',30],['防水袋证件',50],['大防水袋衣物',80]],
+  '🌧 防护': [['雨衣全身款',350],['防水手套',120],['鞋套防水套',80],['暖宝宝×10',300],['保温毯急救',60]],
+  '🍫 饮食': [['饮用水2L/人/天',2000],['水袋2L',50],['能量棒能量胶',60],['坚果果干',80],['压缩饼干',500],['巧克力',200],['即食自热餐',400],['盐丸电解质粉',30]],
+  '💼 个人': [['身份证证件',30],['现金200元+',0],['保险单复印件',20],['紧急联系人卡',10],['手机防水袋',50],['纸巾湿巾',100],['垃圾袋×3',30],['驱蚊液',60],['防晒SPF50+',80],['墨镜UV400',50],['洗漱包旅行装',150],['营地拖鞋',350]],
+};
+
+let currentMode = 'hiking', items = [], chk = [];
+
+// ─── 表单构建 ───
+function buildForm() {
+  const grp = [
+    ['destination','目的地','武功山'],
+    ['distance','路程(km)','25'],
+    ['terrain','路面',['铺装公路','碎石/砂石','泥路/土路','岩石/非铺装','混合路面','沙漠沙地','雪地/冰面','山径/步道'],7],
+    ['climb','爬升(m)','1200'],
+    ['nights','过夜数',['0','1','2','3','4+'],1],
+    ['temp_high','白天温(℃)',Array.from({length:66},(_,i)=>String(i-20)),25],
+    ['temp_low','夜间温(℃)',Array.from({length:66},(_,i)=>String(i-30)),8],
+    ['rain','降雨%',Array.from({length:21},(_,i)=>String(i*5)),4],
+    ['humidity','湿度%',['10','20','30','40','50','60','70','80','90','100'],0],
+    ['people','人数',['1','2','3','4','5','6','7','8','9','10'],1],
+    ['cars','车辆数',['1','2','3','4','5'],1],
+    ['difficulty','难度',['休闲','中等','硬核'],1],
+  ];
+  const grid = document.getElementById('formGrid'); grid.innerHTML='';
+  window.f = {};
+  grp.forEach(([key,label,vals,sel])=>{
+    const d = document.createElement('div'); d.className='form-group';
+    d.innerHTML = '<label>'+label+'</label>';
+    if(Array.isArray(vals)){
+      const s = document.createElement('select');
+      vals.forEach((v,i)=>{ const o=document.createElement('option'); o.value=v; o.text=v; if(i===sel) o.selected=true; s.appendChild(o); });
+      d.appendChild(s);
+    } else {
+      const inp = document.createElement('input'); inp.type='text'; inp.value=vals;
+      d.appendChild(inp);
+    }
+    grid.appendChild(d);
+    window.f[key] = d.lastChild;
+  });
+
+  // route form
+  const rgrid = document.getElementById('routeGrid'); rgrid.innerHTML='';
+  const rdefs = [['depart_time','出发时间',['05:00','05:30','06:00','06:30','07:00','07:30','08:00'],2],
+    ['camp_location','宿营地',['营地A(山脊)','营地B(河谷)','营地C(草甸)','营地D(平台)'],0],
+    ['camp_detail','描述','']];
+  window.rf = {};
+  rdefs.forEach(([key,label,vals,sel])=>{
+    const d = document.createElement('div'); d.className='form-group';
+    d.innerHTML = '<label>'+label+'</label>';
+    if(Array.isArray(vals)){
+      const s = document.createElement('select');
+      vals.forEach((v,i)=>{ const o=document.createElement('option'); o.value=v; o.text=v; if(i===sel) o.selected=true; s.appendChild(o); });
+      d.appendChild(s);
+    } else {
+      const inp = document.createElement('input'); inp.type='text'; inp.value=vals;
+      d.appendChild(inp);
+    }
+    rgrid.appendChild(d);
+    window.rf[key] = d.lastChild;
+  });
+
+  // safety
+  const sc = document.getElementById('safetyChecks');
+  sc.innerHTML = '<div style="font-weight:600;color:#4ade80;font-size:12px;margin-bottom:4px">✅ 安全确认：</div>';
+  ['已告知家人行程','已购买户外保险','手机充满电+充电宝','了解紧急求救号码','携带急救包','不单独行动','关注天气变化'].forEach(t=>{
+    const lb = document.createElement('label');
+    const cb = document.createElement('input'); cb.type='checkbox';
+    lb.appendChild(cb); lb.appendChild(document.createTextNode(' '+t));
+    sc.appendChild(lb);
+  });
+}
+
+function gv(key,def=''){ const e=window.f[key]; return e?e.value||def:def; }
+function gi(key){ return parseInt(gv(key))||0; }
+function gf(key){ return parseFloat(gv(key))||0; }
+
+// ─── 模式切换 ───
+function switchMode(m){
+  currentMode=m;
+  document.getElementById('modeHiking').className='mode-btn'+(m==='hiking'?' active':'');
+  document.getElementById('modeDriving').className='mode-btn'+(m==='driving'?' active':'');
+  buildForm();
+  clearTable();
+  document.getElementById('weightMain').textContent='点击「算负重」查看';
+  document.getElementById('weightSub').textContent='';
+  document.getElementById('weightDetail').textContent='先点「生成清单」再勾选装备';
+}
+
+// ─── 生成清单 ───
+function generateList(){
+  try {
+    items=[]; chk=[];
+    if(currentMode==='hiking') buildHiking();
+    else buildDriving();
+    renderTable();
+    updateRisk();
+  } catch(e){ alert('生成出错: '+e.message); }
+}
+
+function add(cat,name,w,qty){ items.push({cat,name,w,qty}); chk.push(false); }
+
+function buildHiking(){
+  const terrain=gv('terrain'), nights=gi('nights'), rain=gi('rain'), tl=gi('temp_low');
+  const ppl=gi('people'), climb=gf('climb'), dist=gf('distance');
+  for(let [n,w] of HIKING_EQUIP['⛺ 露营']) add('⛺ 露营',n,w,nights>0?Math.ceil(ppl/2):0);
+  for(let [n,w] of HIKING_EQUIP['🔥 炊具']) add('🔥 炊具',n,w,nights>0?1:0);
+  for(let [n,w] of HIKING_EQUIP['🥾 服装']) add('🥾 服装',n,w,ppl);
+  for(let [n,w] of HIKING_EQUIP['🧭 导航']) add('🧭 导航',n,w,1);
+  for(let [n,w] of HIKING_EQUIP['🩹 急救']) add('🩹 急救',n,w,nights>0?Math.ceil(ppl/2):1);
+  for(let [n,w] of HIKING_EQUIP['🔧 工具']) add('🔧 工具',n,w,n.includes('登山')?ppl:1);
+  for(let [n,w] of HIKING_EQUIP['🌧 防护']) add('🌧 防护',n,w,n.includes('雨衣')?ppl:(rain>30||tl<5)?ppl:0);
+  for(let [n,w] of HIKING_EQUIP['🍫 饮食']) add('🍫 饮食',n,w,n.includes('饮用水')?ppl:ppl);
+  for(let [n,w] of HIKING_EQUIP['💼 个人']) add('💼 个人',n,w,Math.max(1,Math.ceil(ppl/2)));
+  if(terrain.includes('雪')){ add('❄ 雪地','冰爪/钉鞋套',400,ppl); add('❄ 雪地','雪套绑腿',200,ppl); add('❄ 雪地','墨镜防雪盲',60,ppl); }
+  if(terrain==='沙漠沙地'){ add('🏜 沙漠','防沙面罩眼镜',150,ppl); add('🏜 沙漠','额外饮水',1500,ppl); }
+  if(climb>2500) add('🏔 高海拔','红景天高原药品',50,ppl);
+  if(dist>20){ add('⏫ 长途','备用压缩饼干',200,ppl); add('⏫ 长途','备用干袜',80,ppl); }
+}
+
+function buildDriving(){
+  const terrain=gv('terrain'), diff=gv('difficulty'), nights=gi('nights'), tl=gi('temp_low'), rain=gi('rain'), ppl=gi('people');
+  const veh=[['全尺寸备胎',1],['千斤顶',1],['脱困板×2',1],['绞盘8000lb+',1],['拖车绳',1],['搭电线',1],['充气泵+胎压计',1],['灭火器×2',2],['三角警示牌',1],['反光背心×2',2],['应急电源',1]];
+  const tool=[['多功能工具刀',1],['套筒扳手套装',1],['螺丝刀组',1],['扎带绝缘胶带',1],['保险丝×10',1],['备用机油',1],['补胎胶片',1],['拖车D型环',1]];
+  const fluid=[['玻璃水额外',1],['防冻液备用',1],['刹车油小瓶',1]];
+  for(let [n,q] of veh) add('🚗 车辆',n,0,q);
+  for(let [n,q] of tool) add('🔧 工具',n,0,q);
+  for(let [n,q] of fluid) add('💧 油液',n,0,q);
+  ['冲锋衣',450,'保暖层羽绒',350,'速干衣',150,'速干裤',200,'保暖内衣',120,'保暖裤',180,'遮阳帽',60,'保暖帽',50,'魔术头巾',40,'手套',80].forEach((n,i)=>{ if(i%2===0) add('🧥 服装',n,0,ppl); });
+  if(nights>=1){ for(let [n,w] of HIKING_EQUIP['⛺ 露营'].slice(0,4)) add('⛺ 露营',n,w,1); add('⛺ 露营','便携炉具+气罐',0,1); }
+  if(nights>=2){ add('⛺ 露营','折叠桌椅',0,1); add('⛺ 露营','天幕地钉',0,1); }
+  add('🍖 饮食','饮用水',0,ppl); add('🍖 饮食','功能饮料',0,ppl); add('🍖 饮食','能量棒巧克力',0,ppl); add('🍖 饮食','压缩饼干',0,2);
+  add('📡 导航','手机+充电宝',400,1); add('📡 导航','离线地图',0,1); add('📡 导航','指南针',50,1); add('📡 导航','对讲机',180,1); add('📡 导航','口哨',10,1);
+  add('🩹 急救','全面急救包',300,1); add('🩹 急救','常用药品3天',200,1);
+  add('🔋 电源','头灯',80,ppl); add('🔋 电源','营地灯',150,1); add('🔋 电源','大容量充电宝',400,1);
+  add('👤 个人','身份证保险单',30,1); add('👤 个人','现金',0,1); add('👤 个人','换洗衣物',300,ppl); add('👤 个人','垃圾袋',10,3);
+  if(terrain!=='铺装公路'){ add('🛠 路况','拖车绳重型',0,1); add('🛠 路况','工兵铲',0,1); add('🛠 路况','防滑链',0,1); }
+  if(diff==='硬核'){ add('⚡ 进阶','绞盘',0,1); add('⚡ 进阶','Hi-Lift千斤顶',0,1); }
+  if(tl<5){ add('🧊 低温','防冻液补充',0,1); add('🧊 低温','-35号柴油',0,30); }
+  if(rain>30) add('🌧 雨天','防水袋电子产品',0,ppl);
+}
+
+// ─── 表格渲染 ───
+function renderTable(){
+  const tb=document.getElementById('equipBody'); tb.innerHTML='';
+  if(!items.length){ tb.innerHTML='<tr><td colspan="5" class="empty-state">暂无装备数据</td></tr>'; return; }
+  items.forEach((it,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td style="color:#64748b;font-size:11px">'+it.cat+'</td><td>'+it.name+'</td>'
+      +'<td style="text-align:center">'+it.w+'</td><td style="text-align:center">'+it.qty+'</td>'
+      +'<td style="text-align:center"><span class="carry-bt'+(chk[i]?' ch':'')+'" onclick="tog('+i+')">'+(chk[i]?'✓':'')+'</span></td>';
+    tb.appendChild(tr);
+  });
+  document.getElementById('weightMain').textContent=items.length+'项装备已生成';
+}
+function clearTable(){ document.getElementById('equipBody').innerHTML='<tr><td colspan="5" class="empty-state">请点击「生成清单」</td></tr>'; }
+function tog(i){ chk[i]=!chk[i]; renderTable(); }
+function selAll(){ chk=chk.map(()=>true); renderTable(); document.getElementById('weightMain').textContent='已全选 '+items.length+' 项'; }
+function deselAll(){ chk=chk.map(()=>false); renderTable(); document.getElementById('weightMain').textContent='已取消全选'; }
+
+// ─── 行程时间线 ───
+function genTimeline(){
+  try {
+    const dep=window.rf&&rf.depart_time?rf.depart_time.value:'06:00';
+    const camp=window.rf&&rf.camp_location?rf.camp_location.value:'';
+    const detail=window.rf&&rf.camp_detail?rf.camp_detail.value:'';
+    const dist=gf('distance'), terrain=gv('terrain',''), nights=gi('nights'), climb=gf('climb'), mode=currentMode;
+    let lines=['='.repeat(44),'🗺 行程时间线','='.repeat(44)];
+    lines.push('\n'+dep+' - 出发');
+    lines.push('   - 对照清单检查装备');
+    lines.push('   - 确认油量电量充足');
+    lines.push('   - 通知紧急联系人');
+    if(mode==='driving'){
+      const spd={'铺装公路':60,'碎石/砂石':35,'泥路/土路':20,'混合路面':30,'沙漠沙地':25,'雪地/冰面':15,'岩石/非铺装':12}[terrain]||20;
+      if(spd>0&&dist>0){
+        if(dist>100) lines.push('\n'+addTime(dep,dist*0.3/spd)+' - 中途补给停靠');
+        lines.push('\n'+addTime(dep,dist/spd)+' - 到达目的地');
+      } else lines.push('\n到达徒步起点');
+    } else {
+      const hs=4,ct=climb>0?climb/500:0;
+      if(dist>0){
+        lines.push('\n'+addTime(dep,dist/2/hs)+' - 前半程休息点');
+        lines.push('   - 休息15分钟补水');
+        lines.push('\n'+addTime(dep,dist/hs+ct)+' - 到达营地');
+        if(detail) lines.push('   - 📍 '+detail);
+      } else lines.push('\n到达营地');
+    }
+    if(camp) lines.push('\n营地：'+camp);
+    lines.push('   - 搭帐篷、准备餐食');
+    lines.push('   - 检查装备状态');
+    if(nights>1) lines.push('   - 规划次日路线');
+    lines.push('\n返回:'+(window.rf&&rf.est_return?rf.est_return.value:'待定'));
+    document.getElementById('timelineContent').textContent=lines.join('\n');
+    updateRisk();
+  } catch(e){ alert('时间线生成出错: '+e.message); }
+}
+function addTime(t,m){
+  const [h,mn]=t.split(':').map(Number), tot=h*60+mn+Math.round(m*60);
+  return String(Math.floor(tot/60)%24).padStart(2,'0')+':'+String(tot%60).padStart(2,'0');
+}
+
+// ─── 风险提示 ───
+function updateRisk(){
+  try {
+    const terrain=gv('terrain',''), thi=gi('temp_high'), tlo=gi('temp_low'), rain=gi('rain');
+    const hum=gi('humidity'), dist=gf('distance'), climb=gf('climb'), nights=gi('nights'), diff=gv('difficulty','');
+    let r=[], t=[];
+    if(tlo<0){ r.push('🔴 极寒:'+tlo+'℃冻伤风险'); t.push('穿保暖内衣+羽绒+防风外套'); t.push('温标-15℃以下睡袋'); }
+    else if(tlo<5){ r.push('🟡 低温:'+tlo+'℃注意保暖'); t.push('保暖帽、手套、暖宝宝'); }
+    if(thi>35){ r.push('🔴 高温:'+thi+'℃中暑风险'); t.push('多带水(人3L/天)，避开正午'); }
+    else if(thi>30) r.push('🟡 高温:'+thi+'℃注意防暑');
+    if(rain>70){ r.push('🔴 暴雨:'+rain+'%山洪滑坡风险'); t.push('避开河道峡谷，装备防水'); }
+    else if(rain>40){ r.push('🟡 降雨:'+rain+'%备雨具'); t.push('雨后路滑，注意脚下'); }
+    if(terrain.includes('岩石')){ r.push('🟡 岩石地形:崴脚落石风险'); t.push('高帮鞋+登山杖'); }
+    if(terrain.includes('沙漠')){ r.push('🔴 沙漠:缺水迷路'); t.push('多带水2倍量'); }
+    if(terrain.includes('雪')){ r.push('🔴 雪地:结冰滑倒'); t.push('冰爪/防滑链'); }
+    if(climb>2500){ r.push('🔴 高海拔:'+climb+'m高反风险'); t.push('缓慢行进备红景天'); }
+    if(nights>0&&dist>50){ r.push('🟡 过夜安全'); t.push('营地远离悬崖河道，头灯备足'); }
+    if(diff==='硬核'){ r.push('🔴 硬核越野高风险'); t.push('须有绞盘拖车装备，勿单独'); }
+    if(hum>80) r.push('🟡 高湿度:'+hum+'%装备易潮');
+    let html=r.length?r.join('\n')+'\n\n📌 建议：\n'+t.map((x,i)=>(i+1)+'. '+x).join('\n'):'✅ 未发现明显风险';
+    html+='\n\n📋 通用守则：\n  · 出发前告知家人\n  · 2人以上同行\n  · 保持电量充足\n  · 恶劣天气取消\n  · 遵守LNT原则\n  · 紧急拨打110';
+    document.getElementById('riskContent').textContent=html;
+  } catch(e){ document.getElementById('riskContent').textContent='风险生成出错: '+e.message; }
+}
+
+// ─── 重量 ───
+function calcWeight(){
+  try {
+    if(currentMode==='driving'){ alert('驾车模式由车辆承载，无需计算负重'); return; }
+    let total=0, cats={}, details=[];
+    items.forEach((it,i)=>{
+      if(chk[i]){ const w=it.w*it.qty; total+=w; cats[it.cat]=(cats[it.cat]||0)+w; details.push([it.name,it.w,it.qty,w]); }
+    });
+    const ppl=gi('people')||1;
+    document.getElementById('weightMain').textContent='⛰ 已选'+details.length+'项 | 总重'+(total/1000).toFixed(1)+'kg';
+    document.getElementById('weightSub').textContent='人均'+(total/1000/ppl).toFixed(1)+'kg';
+    let txt='';
+    if(details.length){
+      details.forEach(([n,w,q,t])=>{ txt+=n+' ×'+q+' = '+(t<1000?t+'g':(t/1000).toFixed(1)+'kg')+'\n'; });
+      txt+='\n✨ 总重'+(total/1000).toFixed(1)+'kg  人均'+(total/1000/ppl).toFixed(1)+'kg\n';
+      const per=total/1000/ppl;
+      txt+=per>15?'\n⚠ 人均>15kg建议精简':per>10?'\n💡 注意合理分配':'\n✅ 负重合理';
+      txt+='\n\n📂 分类：\n';
+      Object.entries(cats).sort((a,b)=>b[1]-a[1]).forEach(([c,w])=>{ txt+=c+': '+(w/1000).toFixed(1)+'kg ('+(w*100/total).toFixed(0)+'%)\n'; });
+    } else txt='请先生成清单并勾选装备';
+    document.getElementById('weightDetail').textContent=txt;
+  } catch(e){ alert('计算出错: '+e.message); }
+}
+
+// ─── 导出 ───
+function exportCSV(){
+  try {
+    const sel=chk.filter(Boolean).length;
+    if(!sel){ alert('请先勾选至少一项装备'); return; }
+    const dest=gv('destination','户外'), mode=currentMode==='hiking'?'徒步':'越野';
+    let csv='\uFEFF模式,目的地,类别,装备名称,重量(克),数量,是否携带\n';
+    const today=new Date().toISOString().slice(0,10);
+    items.forEach((it,i)=>{ if(chk[i]) csv+=mode+','+dest+','+it.cat+','+it.name+','+it.w+','+it.qty+',✓\n'; });
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=mode+'装备清单_'+dest+'_'+today+'.csv'; a.click();
+    URL.revokeObjectURL(a.href);
+    document.getElementById('weightMain').textContent='已导出'+sel+'项CSV';
+  } catch(e){ alert('导出出错: '+e.message); }
+}
+
+buildForm();
+</script>
+</body>
+</html>

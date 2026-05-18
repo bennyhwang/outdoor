@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>倒计时</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            color: #fff;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .input-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #e94560;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        input[type="date"] {
+            color-scheme: dark;
+        }
+
+        button {
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(233, 69, 96, 0.4);
+        }
+
+        .countdown-list {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .countdown-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .event-name {
+            font-size: 20px;
+            color: #fff;
+            word-wrap: break-word;
+            max-width: 80%;
+        }
+
+        .delete-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            padding: 0;
+        }
+
+        .delete-btn:hover {
+            background: rgba(233, 69, 96, 0.5);
+            color: #fff;
+            transform: scale(1.1);
+        }
+
+        .days-count {
+            font-size: 80px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #e94560 0%, #ff6b6b 50%, #feca57 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+            text-align: center;
+        }
+
+        .days-label {
+            text-align: center;
+            font-size: 20px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 5px;
+            letter-spacing: 4px;
+        }
+
+        .target-date {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .status-message {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #feca57;
+        }
+
+        .days-count.celebrating {
+            background: linear-gradient(135deg, #feca57 0%, #ff6b6b 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+
+        .days-count.passed {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.5);
+            padding: 60px 20px;
+        }
+
+        .empty-state-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 480px) {
+            .days-count {
+                font-size: 60px;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>倒计时</h1>
+    
+    <div class="input-section">
+        <div class="input-group">
+            <label for="eventName">事件名称</label>
+            <input type="text" id="eventName" placeholder="例如：春节、我的生日...">
+        </div>
+        
+        <div class="input-group">
+            <label for="targetTime">目标日期</label>
+            <input type="date" id="targetTime">
+        </div>
+        
+        <button onclick="addCountdown()">添加倒计时</button>
+    </div>
+
+    <div class="countdown-list" id="countdownList"></div>
+
+    <script>
+        let countdowns = [];
+
+        function loadCountdowns() {
+            const saved = localStorage.getItem('countdowns');
+            if (saved) {
+                countdowns = JSON.parse(saved);
+            }
+            renderCountdowns();
+        }
+
+        function saveCountdowns() {
+            localStorage.setItem('countdowns', JSON.stringify(countdowns));
+        }
+
+        function addCountdown() {
+            const eventName = document.getElementById('eventName').value.trim();
+            const targetTime = document.getElementById('targetTime').value;
+
+            if (!eventName) {
+                alert('请输入事件名称');
+                return;
+            }
+
+            if (!targetTime) {
+                alert('请选择目标日期');
+                return;
+            }
+
+            const targetDate = new Date(targetTime);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            if (targetDate < today) {
+                alert('目标日期必须是今天或之后');
+                return;
+            }
+
+            const countdown = {
+                id: Date.now(),
+                eventName: eventName,
+                targetDate: targetTime,
+                createdAt: new Date().toISOString()
+            };
+
+            countdowns.push(countdown);
+            saveCountdowns();
+            renderCountdowns();
+
+            document.getElementById('eventName').value = '';
+            document.getElementById('targetTime').value = '';
+        }
+
+        function deleteCountdown(id) {
+            countdowns = countdowns.filter(c => c.id !== id);
+            saveCountdowns();
+            renderCountdowns();
+        }
+
+        function calculateDays(targetDateStr) {
+            const targetDate = new Date(targetDateStr);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            targetDate.setHours(0, 0, 0, 0);
+            
+            const diff = targetDate - today;
+            return Math.ceil(diff / (1000 * 60 * 60 * 24));
+        }
+
+        function getStatusMessage(days) {
+            if (days < 0) {
+                return '已过去';
+            } else if (days === 0) {
+                return '就是今天！';
+            } else if (days === 1) {
+                return '明天就是这一天';
+            } else if (days <= 7) {
+                return '即将到来';
+            } else if (days <= 30) {
+                return '快了';
+            }
+            return '';
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+            return date.toLocaleDateString('zh-CN', options);
+        }
+
+        function getCardClass(days) {
+            if (days < 0) {
+                return 'passed';
+            } else if (days === 0) {
+                return 'celebrating';
+            }
+            return '';
+        }
+
+        function renderCountdowns() {
+            const list = document.getElementById('countdownList');
+            
+            if (countdowns.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📅</div>
+                        <p>暂无倒计时事件</p>
+                        <p style="font-size: 14px; margin-top: 10px;">在上方添加事件开始倒计时</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = countdowns.map(countdown => {
+                const days = calculateDays(countdown.targetDate);
+                const cardClass = getCardClass(days);
+                const displayDays = days < 0 ? Math.abs(days) : days;
+                const prefix = days < 0 ? '-' : (days === 0 ? '' : '');
+
+                return `
+                    <div class="countdown-card">
+                        <div class="card-header">
+                            <div class="event-name">${escapeHtml(countdown.eventName)}</div>
+                            <button class="delete-btn" onclick="deleteCountdown(${countdown.id})">×</button>
+                        </div>
+                        <div class="days-count ${cardClass}">${prefix}${displayDays}</div>
+                        <div class="days-label">${days < 0 ? '天已过去' : '天'}</div>
+                        <div class="target-date">${formatDate(countdown.targetDate)}</div>
+                        ${getStatusMessage(days) ? `<div class="status-message">${getStatusMessage(days)}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function updateCountdowns() {
+            renderCountdowns();
+        }
+
+        setInterval(updateCountdowns, 60000);
+
+        loadCountdowns();
+    </script>
+</body>
+</html>

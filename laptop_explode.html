@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D爆炸图演示 - 精致版</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+        }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .tabs {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; z-index: 10;
+        }
+        .tab {
+            padding: 12px 30px; background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 25px;
+            color: #fff; font-size: 15px; cursor: pointer; transition: all 0.3s ease;
+        }
+        .tab:hover { background: rgba(255,255,255,0.2); }
+        .tab.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-color: transparent; }
+        .controls {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 15px; z-index: 10;
+        }
+        button {
+            padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none; border-radius: 25px; color: #fff; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.6); }
+        button.active { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .info {
+            position: fixed; top: 75px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+            padding: 15px 30px; border-radius: 15px; text-align: center; z-index: 10;
+        }
+        .info h2 { font-size: 22px; margin-bottom: 5px; }
+        .info p { font-size: 14px; color: rgba(255,255,255,0.7); }
+        .slider-container {
+            position: fixed; right: 30px; top: 50%; transform: translateY(-50%);
+            display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 10;
+        }
+        .slider-container label { font-size: 14px; color: rgba(255,255,255,0.8); }
+        input[type="range"] {
+            -webkit-appearance: none; width: 150px; height: 6px;
+            background: rgba(255,255,255,0.2); border-radius: 3px; outline: none;
+            transform: rotate(-90deg);
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%; cursor: pointer;
+        }
+        .legend {
+            position: fixed; left: 20px; top: 50%; transform: translateY(-50%);
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+            padding: 15px; border-radius: 15px; z-index: 10; max-height: 75vh; overflow-y: auto;
+            min-width: 160px;
+        }
+        .legend h3 { font-size: 14px; margin-bottom: 10px; color: rgba(255,255,255,0.8); padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+        .legend-color { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+        #error-msg {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(255,0,0,0.3); padding: 20px; border-radius: 10px;
+            text-align: center; display: none; z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="error-msg"></div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('laptop', this)">笔记本电脑</div>
+        <div class="tab" onclick="switchTab('car', this)">小汽车</div>
+    </div>
+
+    <div class="info">
+        <h2 id="model-title">笔记本电脑爆炸图演示</h2>
+        <p>拖动滑块或点击按钮查看爆炸效果，鼠标移动可旋转视角</p>
+    </div>
+
+    <div class="controls">
+        <button id="btn-explode" onclick="toggleExplode()">爆炸展开</button>
+        <button id="btn-reset" onclick="resetView()">重置视角</button>
+    </div>
+
+    <div class="slider-container">
+        <label>爆炸程度</label>
+        <input type="range" id="explode-slider" min="0" max="100" value="0" oninput="onSliderChange(this.value)">
+    </div>
+
+    <div class="legend">
+        <h3>部件列表</h3>
+        <div id="legend-items"></div>
+    </div>
+
+    <script>
+        function showError(msg) {
+            document.getElementById('error-msg').style.display = 'block';
+            document.getElementById('error-msg').innerHTML = msg;
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js" onerror="showError('Three.js加载失败')"></script>
+    <script>
+        if (typeof THREE === 'undefined') {
+            showError('Three.js未加载');
+        } else {
+            let scene, camera, renderer;
+            let modelParts = [];
+            let isExploded = false;
+            let explodeProgress = 0;
+            let targetExplodeProgress = 0;
+            let mouseX = 0, mouseY = 0;
+            let targetRotationX = 0, targetRotationY = 0;
+            let currentTab = 'laptop';
+            let animationId;
+
+            const laptopPartsData = [];
+            const carPartsData = [];
+
+            function init() {
+                try {
+                    scene = new THREE.Scene();
+                    scene.background = new THREE.Color(0x0a0a1a);
+
+                    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+                    camera.position.set(0, 6, 15);
+                    camera.lookAt(0, 0, 0);
+
+                    renderer = new THREE.WebGLRenderer({ antialias: true });
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                    renderer.shadowMap.enabled = true;
+                    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                    renderer.toneMappingExposure = 1.2;
+                    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+                    const ambientLight = new THREE.AmbientLight(0x404060, 0.4);
+                    scene.add(ambientLight);
+
+                    const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+                    sunLight.position.set(8, 15, 8);
+                    sunLight.castShadow = true;
+                    sunLight.shadow.mapSize.width = 2048;
+                    sunLight.shadow.mapSize.height = 2048;
+                    sunLight.shadow.camera.near = 0.5;
+                    sunLight.shadow.camera.far = 50;
+                    scene.add(sunLight);
+
+                    const fillLight = new THREE.DirectionalLight(0x88aaff, 0.4);
+                    fillLight.position.set(-8, 5, -8);
+                    scene.add(fillLight);
+
+                    const rimLight = new THREE.DirectionalLight(0xff8866, 0.3);
+                    rimLight.position.set(0, -5, 10);
+                    scene.add(rimLight);
+
+                    createLaptop();
+
+                    window.addEventListener('resize', onWindowResize);
+                    window.addEventListener('mousemove', onMouseMove);
+
+                    animate();
+                } catch (e) {
+                    showError('初始化失败: ' + e.message);
+                }
+            }
+
+            function createMetalMaterial(color, roughness = 0.3) {
+                return new THREE.MeshStandardMaterial({
+                    color: color,
+                    metalness: 0.8,
+                    roughness: roughness
+                });
+            }
+
+            function createPlasticMaterial(color) {
+                return new THREE.MeshStandardMaterial({
+                    color: color,
+                    metalness: 0.1,
+                    roughness: 0.6
+                });
+            }
+
+            function createGlassMaterial() {
+                return new THREE.MeshStandardMaterial({
+                    color: 0x88ccff,
+                    metalness: 0.1,
+                    roughness: 0.1,
+                    transparent: true,
+                    opacity: 0.4
+                });
+            }
+
+            function createGlowMaterial(color) {
+                return new THREE.MeshStandardMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 0.8,
+                    metalness: 0.2,
+                    roughness: 0.3
+                });
+            }
+
+            function addPart(geometry, material, position, explodeDir, name, color) {
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(...position);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.userData = { 
+                    name: name, 
+                    originalPos: [...position], 
+                    explodeDir: explodeDir,
+                    color: color
+                };
+                scene.add(mesh);
+                modelParts.push(mesh);
+                if (!laptopPartsData.find(p => p.name === name)) {
+                    laptopPartsData.push({ name, color });
+                }
+            }
+
+            function createLaptop() {
+                modelParts.forEach(part => scene.remove(part));
+                modelParts.length = 0;
+                laptopPartsData.length = 0;
+                currentTab = 'laptop';
+                document.getElementById('model-title').textContent = '笔记本电脑爆炸图演示';
+                
+                const baseY = 0;
+                const mat = {
+                    screenBezel: createMetalMaterial(0x1a1a1a, 0.2),
+                    screen: createGlowMaterial(0x001133),
+                    keyboard: createMetalMaterial(0x2a2a2a, 0.4),
+                    keycap: createMetalMaterial(0x333333, 0.5),
+                    trackpad: createMetalMaterial(0x444444, 0.3),
+                    palmrest: createMetalMaterial(0x1a1a1a, 0.3),
+                    cpu: createMetalMaterial(0x555555, 0.1),
+                    gpu: createMetalMaterial(0x444444, 0.1),
+                    ram: createMetalMaterial(0x004400, 0.4),
+                    heatsink: createMetalMaterial(0xb87333, 0.15),
+                    fan: createMetalMaterial(0x222222, 0.5),
+                    ssd: createMetalMaterial(0x333333, 0.3),
+                    battery: createMetalMaterial(0x1a1a1a, 0.4),
+                    motherboard: createMetalMaterial(0x003300, 0.6),
+                    topCover: createMetalMaterial(0xcccccc, 0.2),
+                    bottomCover: createMetalMaterial(0x999999, 0.3),
+                    hinge: createMetalMaterial(0x666666, 0.2),
+                    speaker: createMetalMaterial(0x222222, 0.6),
+                    wifi: createMetalMaterial(0x555533, 0.5),
+                    webcam: createMetalMaterial(0x111111, 0.4),
+                    microphone: createMetalMaterial(0x222222, 0.4),
+                    touchpadBtn: createMetalMaterial(0x333333, 0.5),
+                    powerBtn: createMetalMaterial(0x444444, 0.3),
+                    fingerprint: createMetalMaterial(0x111111, 0.2),
+                    portCover: createMetalMaterial(0x888888, 0.3),
+                    screenCable: createMetalMaterial(0x222222, 0.5),
+                    keyboardCable: createMetalMaterial(0x222222, 0.5),
+                    usbPort: createMetalMaterial(0x666666, 0.2),
+                    hdmiPort: createMetalMaterial(0x555555, 0.2),
+                    audioJack: createMetalMaterial(0x444444, 0.2),
+                    ramSlot: createMetalMaterial(0x111111, 0.5),
+                    biosBattery: createMetalMaterial(0x666666, 0.3),
+                    speakerGrille: createMetalMaterial(0x111111, 0.8)
+                };
+
+                // 屏幕组件 (后盖)
+                addPart(new THREE.BoxGeometry(6.2, 0.08, 4.2), mat.screenBezel, [0, 0.04, -2.2], [0, 6, -8], '屏幕边框', '#1a1a1a');
+                
+                // 显示屏
+                addPart(new THREE.BoxGeometry(5.8, 0.05, 3.8), mat.screen, [0, 0.02, -2.2], [0, 5, -7], '显示屏', '#001133');
+                
+                // 摄像头
+                addPart(new THREE.CylinderGeometry(0.12, 0.12, 0.06, 16), mat.webcam, [0, 0.06, -4.3], [0, 7, -9], '摄像头', '#111111');
+                addPart(new THREE.CylinderGeometry(0.06, 0.06, 0.04, 8), mat.microphone, [0.3, 0.06, -4.3], [0.5, 7, -9], '麦克风', '#222222');
+
+                // 上盖
+                addPart(new THREE.BoxGeometry(6.4, 0.15, 4.4), mat.topCover, [0, 0.1, -2.2], [0, 5.5, -7], 'A面外壳', '#cccccc');
+                
+                // 键盘面 (C面)
+                addPart(new THREE.BoxGeometry(6.0, 0.1, 2.8), mat.palmrest, [0, -0.1, 0.3], [0, 3, 4], 'C面掌托', '#1a1a1a');
+                
+                // 键盘框架
+                addPart(new THREE.BoxGeometry(5.5, 0.08, 2.2), mat.keyboard, [0, -0.04, 0.2], [0, 3.5, 4.5], '键盘底座', '#2a2a2a');
+                
+                // 键帽 - 创建多行键
+                for (let row = 0; row < 4; row++) {
+                    for (let col = 0; col < 14; col++) {
+                        const isFunctionKey = row === 0;
+                        const keyWidth = isFunctionKey ? 0.35 : 0.38;
+                        const keyHeight = row === 1 && (col === 0 || col === 13) ? 0.08 : 0.05;
+                        addPart(
+                            new THREE.BoxGeometry(keyWidth, keyHeight, isFunctionKey ? 0.28 : 0.32),
+                            mat.keycap,
+                            [(col - 6.5) * 0.4, 0, (row - 1.5) * 0.35 + 0.2],
+                            [(col - 6.5) * 0.4 * 0.3, 3.8 + row * 0.3, 4.8 + row * 0.2],
+                            row === 0 ? '功能键' : '键帽',
+                            '#333333'
+                        );
+                    }
+                }
+                
+                // 触控板
+                addPart(new THREE.BoxGeometry(1.8, 0.04, 1.2), mat.trackpad, [0, -0.06, 2], [0, 2, 5], '触控板', '#444444');
+                addPart(new THREE.BoxGeometry(1.8, 0.06, 0.15), mat.touchpadBtn, [0, -0.08, 2.7], [0, 1.5, 5.5], '触控板按键', '#333333');
+                
+                // 电源按钮
+                addPart(new THREE.BoxGeometry(0.25, 0.04, 0.1), mat.powerBtn, [2.5, -0.02, -1.2], [4, 2, 2], '电源按钮', '#444444');
+                
+                // 指纹识别
+                addPart(new THREE.BoxGeometry(0.3, 0.03, 0.25), mat.fingerprint, [-2.3, -0.02, 1.8], [-3.5, 1.5, 4], '指纹识别', '#111111');
+
+                // 内部组件
+                // 主板
+                addPart(new THREE.BoxGeometry(4.5, 0.12, 2.8), mat.motherboard, [0, -0.3, 0], [0, -2, 0], '主板', '#003300');
+                
+                // CPU
+                addPart(new THREE.BoxGeometry(0.9, 0.15, 0.9), mat.cpu, [-1, -0.45, -0.3], [-2, -3, -2], 'CPU处理器', '#555555');
+                addPart(new THREE.BoxGeometry(0.5, 0.05, 0.5), mat.heatsink, [-1, -0.55, -0.3], [-2, -4, -2.5], 'CPU散热器', '#b87333');
+                
+                // GPU
+                addPart(new THREE.BoxGeometry(1.0, 0.15, 0.8), mat.gpu, [0.8, -0.45, -0.3], [2, -3, -2], 'GPU显卡', '#444444');
+                
+                // 内存条
+                for (let i = 0; i < 2; i++) {
+                    addPart(new THREE.BoxGeometry(1.3, 0.08, 0.4), mat.ram, [-0.6 + i * 1.2, -0.38, 0.8], [-1 + i * 2, -1, 2], i === 0 ? '内存条' : '内存条2', '#004400');
+                }
+                
+                // 散热系统
+                addPart(new THREE.BoxGeometry(2.5, 0.15, 0.6), mat.heatsink, [0, -0.5, -0.8], [0, -3.5, -3], '主散热管', '#b87333');
+                addPart(new THREE.BoxGeometry(0.5, 0.12, 0.5), mat.heatsink, [-1.8, -0.5, -0.5], [-3, -3, -2.5], '散热片组', '#b87333');
+                addPart(new THREE.CylinderGeometry(0.5, 0.5, 0.15, 32), mat.fan, [-1.5, -0.55, -0.5], [-3, -4, -3], 'CPU风扇', '#222222');
+                addPart(new THREE.CylinderGeometry(0.4, 0.4, 0.12, 32), mat.fan, [1.2, -0.52, -0.5], [2.5, -3.5, -2.5], 'GPU风扇', '#222222');
+                
+                // SSD
+                addPart(new THREE.BoxGeometry(1.4, 0.1, 0.8), mat.ssd, [1.5, -0.42, 0.3], [3, -2.5, 1], 'SSD固态硬盘', '#333333');
+                
+                // 电池
+                addPart(new THREE.BoxGeometry(3.2, 0.25, 2.0), mat.battery, [0, -0.6, 1.2], [0, -4, 4], '电池', '#1a1a1a');
+                
+                // 扬声器
+                addPart(new THREE.BoxGeometry(0.8, 0.15, 0.5), mat.speaker, [2.3, -0.35, 2], [4, -2, 5], '右扬声器', '#222222');
+                addPart(new THREE.BoxGeometry(0.8, 0.15, 0.5), mat.speaker, [-2.3, -0.35, 2], [-4, -2, 5], '左扬声器', '#222222');
+                
+                // WiFi模块
+                addPart(new THREE.BoxGeometry(0.6, 0.08, 0.4), mat.wifi, [1.8, -0.35, 1.2], [3.5, -1.5, 3], 'WiFi模块', '#555533');
+                
+                // 接口
+                addPart(new THREE.BoxGeometry(0.25, 0.12, 0.15), mat.usbPort, [2.8, -0.2, -0.8], [5, -2, -1], 'USB-C接口', '#666666');
+                addPart(new THREE.BoxGeometry(0.25, 0.12, 0.15), mat.usbPort, [2.8, -0.2, -0.4], [5, -2, 0], 'USB接口', '#666666');
+                addPart(new THREE.BoxGeometry(0.35, 0.1, 0.12), mat.hdmiPort, [-2.5, -0.2, 0], [-4.5, -2, 0], 'HDMI接口', '#555555');
+                addPart(new THREE.CylinderGeometry(0.08, 0.08, 0.1, 16), mat.audioJack, [-2.5, -0.2, 0.5], [-4.5, -2, 1.5], '音频接口', '#444444');
+                
+                // 铰链
+                addPart(new THREE.BoxGeometry(0.15, 0.3, 0.2), mat.hinge, [2.5, 0, -2.2], [4.5, 4, -6], '右铰链', '#666666');
+                addPart(new THREE.BoxGeometry(0.15, 0.3, 0.2), mat.hinge, [-2.5, 0, -2.2], [-4.5, 4, -6], '左铰链', '#666666');
+                
+                // 下盖 (D面)
+                addPart(new THREE.BoxGeometry(6.4, 0.18, 4.4), mat.bottomCover, [0, -1.0, 0], [0, -5, 0], 'D面底壳', '#999999');
+                
+                // 脚垫
+                addPart(new THREE.BoxGeometry(0.8, 0.08, 0.5), mat.battery, [2.5, -1.15, 1.5], [4, -6, 3], '脚垫', '#1a1a1a');
+                addPart(new THREE.BoxGeometry(0.8, 0.08, 0.5), mat.battery, [-2.5, -1.15, 1.5], [-4, -6, 3], '脚垫2', '#1a1a1a');
+
+                updateLegend(laptopPartsData);
+            }
+
+            function createCar() {
+                modelParts.forEach(part => scene.remove(part));
+                modelParts.length = 0;
+                carPartsData.length = 0;
+                currentTab = 'car';
+                document.getElementById('model-title').textContent = '小汽车爆炸图演示';
+                
+                const mat = {
+                    body: createMetalMaterial(0xcc0000, 0.15),
+                    body2: createMetalMaterial(0xaa0000, 0.2),
+                    chassis: createMetalMaterial(0x222222, 0.5),
+                    glass: createGlassMaterial(),
+                    engine: createMetalMaterial(0x666666, 0.2),
+                    engineBlock: createMetalMaterial(0x555555, 0.25),
+                    transmission: createMetalMaterial(0x444444, 0.3),
+                    wheel: createMetalMaterial(0x111111, 0.7),
+                    tire: createPlasticMaterial(0x1a1a1a),
+                    brake: createMetalMaterial(0x888888, 0.2),
+                    suspension: createMetalMaterial(0x444444, 0.4),
+                    exhaust: createMetalMaterial(0x666666, 0.15),
+                    battery: createMetalMaterial(0x224422, 0.5),
+                    seat: createPlasticMaterial(0x333333),
+                    seat2: createPlasticMaterial(0x2a2a2a),
+                    steering: createPlasticMaterial(0x1a1a1a),
+                    steeringWheel: createPlasticMaterial(0x111111),
+                    dashboard: createPlasticMaterial(0x151515),
+                    headlight: createGlowMaterial(0xffffcc),
+                    taillight: createGlowMaterial(0xff2200),
+                    windshield: createGlassMaterial(),
+                    door: createMetalMaterial(0xbb0000, 0.15),
+                    doorGlass: createGlassMaterial(),
+                    hood: createMetalMaterial(0xcc0000, 0.15),
+                    trunk: createMetalMaterial(0xcc0000, 0.15),
+                    roof: createMetalMaterial(0xcc0000, 0.15),
+                    radiator: createMetalMaterial(0xb87333, 0.2),
+                    ac: createMetalMaterial(0x555555, 0.35),
+                    propeller: createMetalMaterial(0x888888, 0.3),
+                    driveShaft: createMetalMaterial(0x555555, 0.3),
+                    fuel: createMetalMaterial(0x333333, 0.5),
+                    fuseBox: createMetalMaterial(0x222222, 0.4),
+                    wiper: createMetalMaterial(0x222222, 0.4),
+                    mirror: createPlasticMaterial(0x1a1a1a),
+                    grille: createPlasticMaterial(0x111111),
+                    bumper: createPlasticMaterial(0x151515),
+                    bumper2: createPlasticMaterial(0x202020)
+                };
+
+                // 车身外壳
+                addPart(new THREE.BoxGeometry(4.5, 1.2, 1.8), mat.body, [0, 1.0, 0], [0, 6, 0], '车身外壳', '#cc0000');
+                
+                // 车顶
+                addPart(new THREE.BoxGeometry(2.5, 0.8, 1.6), mat.roof, [0, 1.9, 0.2], [0, 7, 2], '车顶', '#cc0000');
+                
+                // 前机盖
+                addPart(new THREE.BoxGeometry(1.8, 0.25, 1.7), mat.hood, [1.5, 1.5, 0], [5, 5, 0], '引擎盖', '#cc0000');
+                
+                // 后备箱盖
+                addPart(new THREE.BoxGeometry(1.0, 0.25, 1.7), mat.trunk, [-1.8, 1.5, 0], [-5, 5, 0], '后备箱盖', '#cc0000');
+                
+                // 前挡风玻璃
+                addPart(new THREE.BoxGeometry(1.6, 0.8, 0.05), mat.windshield, [0.5, 1.8, 0.9], [2, 8, 3], '前挡风玻璃', '#88ccff');
+                // 后挡风玻璃
+                addPart(new THREE.BoxGeometry(1.4, 0.6, 0.05), mat.windshield, [-0.5, 1.7, 0.9], [-2, 7, 3], '后挡风玻璃', '#88ccff');
+                
+                // 车门
+                addPart(new THREE.BoxGeometry(0.2, 1.0, 1.6), mat.door, [2.3, 1.0, 0], [6, 3, 2], '前车门', '#bb0000');
+                addPart(new THREE.BoxGeometry(0.2, 0.9, 1.5), mat.door, [-2.3, 1.0, 0], [-6, 3, 2], '后车门', '#bb0000');
+                // 车窗玻璃
+                addPart(new THREE.BoxGeometry(0.05, 0.7, 1.4), mat.glass, [2.35, 1.1, 0], [6.5, 4, 2], '前侧窗', '#88ccff');
+                addPart(new THREE.BoxGeometry(0.05, 0.6, 1.3), mat.glass, [-2.35, 1.0, 0], [-6.5, 4, 2], '后侧窗', '#88ccff');
+
+                // 底盘
+                addPart(new THREE.BoxGeometry(4.8, 0.3, 2.0), mat.chassis, [0, 0.15, 0], [0, -4, 0], '底盘', '#222222');
+                
+                // 发动机
+                addPart(new THREE.BoxGeometry(1.6, 0.9, 1.2), mat.engineBlock, [1.4, 0.8, 0], [5, 3, 0], '发动机', '#555555');
+                addPart(new THREE.BoxGeometry(1.2, 0.6, 0.8), mat.engine, [1.4, 1.2, 0], [5, 4, 0], '发动机罩', '#666666');
+                addPart(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 16), mat.engine, [2.2, 0.6, 0.3], [6, 2, 1], '排气歧管', '#666666');
+                
+                // 变速箱
+                addPart(new THREE.BoxGeometry(0.8, 0.5, 0.7), mat.transmission, [0.3, 0.5, 0], [2, -1, 2], '变速箱', '#444444');
+                
+                // 传动轴
+                addPart(new THREE.CylinderGeometry(0.08, 0.08, 1.5, 8), mat.driveShaft, [0.5, 0.3, 0.8], [2, -2, 3], '传动轴', '#555555');
+                addPart(new THREE.CylinderGeometry(0.08, 0.08, 1.5, 8), mat.driveShaft, [0.5, 0.3, -0.8], [2, -2, -3], '传动轴2', '#555555');
+                
+                // 散热器
+                addPart(new THREE.BoxGeometry(1.0, 0.5, 0.2), mat.radiator, [2.2, 0.8, 0], [6, 2, 0], '散热器', '#b87333');
+                
+                // 空调压缩机
+                addPart(new THREE.CylinderGeometry(0.2, 0.2, 0.3, 16), mat.ac, [1.0, 0.5, 0.5], [4, -1, 2], '空调压缩机', '#555555');
+                
+                // 排气管
+                addPart(new THREE.CylinderGeometry(0.12, 0.12, 2.5, 16), mat.exhaust, [-2.3, 0.25, 0], [-6, -1, 0], '排气管', '#666666');
+                addPart(new THREE.CylinderGeometry(0.1, 0.15, 0.3, 16), mat.exhaust, [-3.5, 0.25, 0], [-7, -1, 0], '排气管尾', '#666666');
+                
+                // 油箱
+                addPart(new THREE.BoxGeometry(0.8, 0.4, 0.5), mat.fuel, [-1.5, 0.3, 0.5], [-4, -1, 2], '油箱', '#333333');
+
+                // 车轮
+                const wheelPositions = [
+                    [1.8, 0.4, 1], [-1.8, 0.4, 1], [1.8, 0.4, -1], [-1.8, 0.4, -1]
+                ];
+                const wheelNames = ['前轮左', '后轮左', '前轮右', '后轮右'];
+                
+                wheelPositions.forEach((pos, i) => {
+                    // 轮胎
+                    addPart(new THREE.CylinderGeometry(0.4, 0.4, 0.3, 32), mat.tire, pos, [pos[0] * 1.5, -2, pos[2] * 1.5], wheelNames[i], '#1a1a1a');
+                    // 轮毂
+                    addPart(new THREE.CylinderGeometry(0.28, 0.28, 0.25, 16), mat.wheel, [pos[0], pos[1] + 0.02, pos[2]], [pos[0] * 1.5, -1.5, pos[2] * 1.5], wheelNames[i] + '毂', '#111111');
+                    // 刹车盘
+                    addPart(new THREE.CylinderGeometry(0.25, 0.25, 0.08, 32), mat.brake, [pos[0], pos[1], pos[2] + (pos[2] > 0 ? 0.2 : -0.2)], [pos[0] * 1.5, -0.5, pos[2] * 2], wheelNames[i] + '刹车', '#888888');
+                    // 悬挂
+                    addPart(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 8), mat.suspension, [pos[0], pos[1] + 0.3, pos[2] * 0.5], [pos[0] * 1.2, 1, pos[2] * 0.8], wheelNames[i] + '悬挂', '#444444');
+                });
+
+                // 电池
+                addPart(new THREE.BoxGeometry(0.9, 0.35, 0.6), mat.battery, [-1.8, 0.4, -0.5], [-4, 1, -1], '电瓶', '#224422');
+                
+                // 保险丝盒
+                addPart(new THREE.BoxGeometry(0.4, 0.15, 0.3), mat.fuseBox, [0.5, 1.3, -0.5], [2, 5, -1], '保险丝盒', '#222222');
+
+                // 座椅
+                addPart(new THREE.BoxGeometry(0.9, 0.8, 0.9), mat.seat, [0.5, 1.1, 0.2], [2, 5, 2], '驾驶座椅', '#333333');
+                addPart(new THREE.BoxGeometry(0.9, 0.8, 0.9), mat.seat2, [-0.5, 1.1, 0.2], [-2, 5, 2], '副驾驶座椅', '#2a2a2a');
+                
+                // 方向盘
+                addPart(new THREE.CylinderGeometry(0.25, 0.25, 0.08, 32), mat.steeringWheel, [0.8, 1.35, 0.5], [3, 5, 2], '方向盘', '#111111');
+                addPart(new THREE.BoxGeometry(0.15, 0.3, 0.15), mat.steering, [0.8, 1.15, 0.5], [3, 4, 2], '方向盘柱', '#1a1a1a');
+                
+                // 仪表盘
+                addPart(new THREE.BoxGeometry(1.8, 0.4, 0.3), mat.dashboard, [0.5, 1.5, 0.6], [2, 6, 3], '仪表盘', '#151515');
+                
+                // 车灯
+                addPart(new THREE.SphereGeometry(0.18, 16, 16), mat.headlight, [2.3, 1.0, 0.7], [6, 4, 2], '前大灯', '#ffffcc');
+                addPart(new THREE.SphereGeometry(0.18, 16, 16), mat.headlight, [2.3, 1.0, -0.7], [6, 4, -2], '前大灯2', '#ffffcc');
+                addPart(new THREE.BoxGeometry(0.3, 0.15, 0.1), mat.taillight, [-2.3, 1.0, 0.7], [-6, 4, 2], '尾灯', '#ff2200');
+                addPart(new THREE.BoxGeometry(0.3, 0.15, 0.1), mat.taillight, [-2.3, 1.0, -0.7], [-6, 4, -2], '尾灯2', '#ff2200');
+
+                // 后视镜
+                addPart(new THREE.BoxGeometry(0.2, 0.15, 0.1), mat.mirror, [2.2, 1.5, 0.9], [5, 5, 3], '右后视镜', '#1a1a1a');
+                addPart(new THREE.BoxGeometry(0.2, 0.15, 0.1), mat.mirror, [2.2, 1.5, -0.9], [5, 5, -3], '左后视镜', '#1a1a1a');
+                
+                // 中网格栅
+                addPart(new THREE.BoxGeometry(0.8, 0.4, 0.1), mat.grille, [2.3, 0.7, 0], [6, 2, 0], '前格栅', '#111111');
+                
+                // 前后保险杠
+                addPart(new THREE.BoxGeometry(0.3, 0.4, 1.9), mat.bumper, [2.4, 0.4, 0], [6, 1, 0], '前保险杠', '#151515');
+                addPart(new THREE.BoxGeometry(0.25, 0.35, 1.9), mat.bumper2, [-2.35, 0.4, 0], [-6, 1, 0], '后保险杠', '#202020');
+                
+                // 雨刷
+                addPart(new THREE.BoxGeometry(0.6, 0.08, 0.08), mat.wiper, [0.8, 1.4, 1.0], [3, 5, 4], '雨刷', '#222222');
+
+                updateLegend(carPartsData);
+            }
+
+            function updateLegend(partsData) {
+                const container = document.getElementById('legend-items');
+                container.innerHTML = '';
+                const uniqueParts = [...new Map(partsData.map(p => [p.name, p])).values()];
+                uniqueParts.forEach(part => {
+                    const item = document.createElement('div');
+                    item.className = 'legend-item';
+                    item.innerHTML = `<div class="legend-color" style="background: ${part.color}"></div><span>${part.name}</span>`;
+                    container.appendChild(item);
+                });
+            }
+
+            function updateExplodeAnimation() {
+                const speed = 0.04;
+                explodeProgress += (targetExplodeProgress - explodeProgress) * speed;
+
+                modelParts.forEach(part => {
+                    const originalPos = part.userData.originalPos;
+                    const explodeDir = part.userData.explodeDir;
+                    const scale = 1 + explodeProgress * 0.5;
+                    
+                    part.position.x = originalPos[0] + explodeDir[0] * explodeProgress;
+                    part.position.y = originalPos[1] + explodeDir[1] * explodeProgress;
+                    part.position.z = originalPos[2] + explodeDir[2] * explodeProgress;
+
+                    const rotationAmount = explodeProgress * 0.2;
+                    part.rotation.x = Math.sin(Date.now() * 0.0008 + part.userData.name.length) * rotationAmount;
+                    part.rotation.y = Math.cos(Date.now() * 0.0008 + part.userData.name.length) * rotationAmount;
+                });
+            }
+
+            function animate() {
+                animationId = requestAnimationFrame(animate);
+
+                updateExplodeAnimation();
+
+                targetRotationY += (mouseX - targetRotationY) * 0.03;
+                targetRotationX += (mouseY - targetRotationX) * 0.03;
+
+                scene.rotation.y = targetRotationY * 0.25;
+                scene.rotation.x = targetRotationX * 0.15;
+
+                renderer.render(scene, camera);
+            }
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            function onMouseMove(event) {
+                mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+                mouseY = (event.clientY / window.innerHeight) * 2 - 1;
+            }
+
+            function switchTab(tab, element) {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                if (element) element.classList.add('active');
+
+                if (tab === 'laptop') createLaptop();
+                else createCar();
+                resetView();
+            }
+
+            function toggleExplode() {
+                isExploded = !isExploded;
+                targetExplodeProgress = isExploded ? 1 : 0;
+                document.getElementById('btn-explode').textContent = isExploded ? '合并还原' : '爆炸展开';
+                document.getElementById('btn-explode').classList.toggle('active', isExploded);
+                document.getElementById('explode-slider').value = isExploded ? 100 : 0;
+            }
+
+            function resetView() {
+                targetExplodeProgress = 0;
+                explodeProgress = 0;
+                isExploded = false;
+                mouseX = 0;
+                mouseY = 0;
+                targetRotationX = 0;
+                targetRotationY = 0;
+                document.getElementById('btn-explode').textContent = '爆炸展开';
+                document.getElementById('btn-explode').classList.remove('active');
+                document.getElementById('explode-slider').value = 0;
+            }
+
+            function onSliderChange(value) {
+                targetExplodeProgress = value / 100;
+                isExploded = value > 50;
+                document.getElementById('btn-explode').textContent = isExploded ? '合并还原' : '爆炸展开';
+                document.getElementById('btn-explode').classList.toggle('active', isExploded);
+            }
+
+            window.addEventListener('load', init);
+        }
+    </script>
+</body>
+</html>
